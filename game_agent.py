@@ -7,12 +7,47 @@ augment the test suite with your own test cases to further test your code.
 You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
-import random
 from itertools import count
+from math import sqrt
 
 
 class Timeout(Exception):
     """Subclass base exception for code clarity."""
+    pass
+
+
+def euclidean_distance(a, b):
+    return sqrt(sum((a - b)**2 for a, b in zip(a, b)))
+
+
+def stay_close_to_center(game, player):
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
+
+    center = (game.width / 2, game.height / 2)
+    location = game.get_player_location(player)
+    distance = euclidean_distance(center, location)
+
+    return -distance  # the closest to the center, the better
+
+
+def stay_on_longest_track(game, player):
+    pass
+    # if game.is_loser(player):
+    #     return float("-inf")
+
+    # if game.is_winner(player):
+    #     return float("inf")
+
+
+def stay_close_to_opponent(game, player):
+    pass
+
+
+def compose(*heuristics):
     pass
 
 
@@ -44,9 +79,11 @@ def custom_score(game, player):
     if game.is_winner(player):
         return float("inf")
 
-    own_moves = len(game.get_legal_moves(player))
-    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    return float(own_moves - opp_moves)
+    return stay_close_to_center(game, player)
+
+    # own_moves = len(game.get_legal_moves(player))
+    # opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    # return float(own_moves - opp_moves)
 
 
 class CustomPlayer:
@@ -130,7 +167,6 @@ class CustomPlayer:
         Board coordinates corresponding to a legal move; may return
         (-1, -1) if there are no available legal moves.
         """
-
         self.time_left = time_left
 
         # Perform any required initializations, including selecting an initial
@@ -197,25 +233,24 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # the algorithm cannot move the player further on the board
-        # => return the score and move of the current game state
-        if depth == 0 or self.is_game_terminal(game):
+        moves = game.get_legal_moves()
+
+        # cannot move the player further on the board
+        # => return the evaluation of the game state
+        if depth == 0 or len(moves) == 0:
             score = self.score(game, self)
             move = self.NO_MOVE
             return score, move
 
-        moves = game.get_legal_moves()
-
         # initialization
         score = None
-        move = moves[0]
-        subdepth = depth - 1
-        opponent = not maximizing_player
+        move = None
 
         # recur/search
         for m in moves:
-            # we don't care about the move performed at the terminal state
-            s, _ = self.minimax(game.forecast_move(m), subdepth, opponent)
+            # we don't care about the last move performed at the terminal state
+            s, _ = self.minimax(
+                game.forecast_move(m), depth - 1, not maximizing_player)
 
             # decide to change the current score and move
             if self.minimax_change_decision(maximizing_player, s, score):
@@ -270,33 +305,34 @@ class CustomPlayer:
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # the algorithm cannot move the player further on the board
-        # => return the score and move of the current game state
-        if depth == 0 or self.is_game_terminal(game):
+        moves = game.get_legal_moves()
+
+        # cannot move the player further on the board
+        # => return the evaluation of the game state
+        if depth == 0 or len(moves) == 0:
             score = self.score(game, self)
             move = self.NO_MOVE
             return score, move
 
-        moves = game.get_legal_moves()
-
         # initialization
         score = None
-        move = moves[0]
-        subdepth = depth - 1
-        opponent = not maximizing_player
+        move = None
 
         # recur/search
         for m in moves:
-            # we don't care about the move performed at the terminal state
-            s, _ = self.alphabeta( game.forecast_move(m), subdepth, alpha, beta, opponent)
+            # we don't care about the last move performed at the terminal state
+            s, _ = self.alphabeta(
+                game.forecast_move(m), depth - 1, alpha, beta,
+                not maximizing_player)
 
-            # same decision as the minimax algorithm
+            # decide to change the current score and move (same as minimax)
             if self.minimax_change_decision(maximizing_player, s, score):
                 score = s
                 move = m
 
                 # update alpha and beta values
-                alpha, beta = self.alphabeta_update(maximizing_player, alpha, beta, s)
+                alpha, beta = self.alphabeta_update(maximizing_player, alpha,
+                                                    beta, s)
 
                 # decide to cut the search
                 if self.alphabeta_cut_decision(maximizing_player, alpha, beta):
@@ -305,16 +341,13 @@ class CustomPlayer:
         return score, move
 
     @staticmethod
-    def is_game_terminal(game):
-        """Return True if the game is at a terminal state."""
-        return len(game.get_legal_moves()) == 0
-
-    @staticmethod
     def minimax_change_decision(maxplayer, proposed, current=None):
         """Return True if minimax should select the proposed move."""
-        if maxplayer and proposed > (current or float('-inf')):
+        if current is None:
             return True
-        elif not maxplayer and proposed < (current or float('inf')):
+        if maxplayer and proposed > current:
+            return True
+        elif not maxplayer and proposed < current:
             return True
         else:
             return False
@@ -323,9 +356,9 @@ class CustomPlayer:
     def alphabeta_cut_decision(maxplayer, alpha, beta):
         """Return True if alphabeta should stop the current search."""
         # NOTE: the comparison operators are correct (see wikipedia)
-        if maxplayer and alpha >= beta: # beta cut-off
+        if maxplayer and alpha >= beta:  # beta cut-off
             return True
-        elif not maxplayer and alpha >= beta: # alpha cut-off
+        elif not maxplayer and alpha >= beta:  # alpha cut-off
             return True
         else:
             return False
