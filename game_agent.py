@@ -7,6 +7,8 @@ augment the test suite with your own test cases to further test your code.
 You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
+from sample_players import improved_score
+from statistics import mean
 from itertools import count
 from math import sqrt
 
@@ -20,35 +22,48 @@ def euclidean_distance(a, b):
     return sqrt(sum((a - b)**2 for a, b in zip(a, b)))
 
 
+def unapply_last_move(game, player):
+    last_board = game.copy()
+    last_move = game.__last_player_move__[player]
+    last_board.__board_state__[last_move[0]][last_move[1]] = game.BLANK
+
+    return last_board, last_move
+
+
 def stay_close_to_center(game, player):
-    if game.is_loser(player):
-        return float("-inf")
-
-    if game.is_winner(player):
-        return float("inf")
-
     center = (game.width / 2, game.height / 2)
-    location = game.get_player_location(player)
-    distance = euclidean_distance(center, location)
+    player_location = game.get_player_location(player)
+    distance = euclidean_distance(center, player_location)
 
-    return -distance  # the closest to the center, the better
-
-
-def stay_on_longest_track(game, player):
-    pass
-    # if game.is_loser(player):
-    #     return float("-inf")
-
-    # if game.is_winner(player):
-    #     return float("inf")
+    return -distance  # more distance => worst evaluation score
 
 
-def stay_close_to_opponent(game, player):
-    pass
+def stay_close_to_opponent(game, player, aggresive=True):
+    opponent = game.get_opponent(player)
+
+    if aggresive:
+        last_board, last_move = unapply_last_move(game, player)
+        opponent_moves = last_board.get_legal_moves(opponent)
+
+        if last_move in opponent_moves:
+            return 0
+
+    player_location = game.get_player_location(player)
+    opponent_location = game.get_player_location(opponent)
+    distance = euclidean_distance(player_location, opponent_location)
+
+    return -distance  # more distance => worst evaluation score
 
 
-def compose(*heuristics):
-    pass
+def compose_scores(*functions):
+    def composition(game, player):
+        return mean(f(game, player) for f in functions)
+
+    return composition
+
+
+improved_opponent_center = compose_scores(
+    improved_score, stay_close_to_opponent, stay_close_to_center)
 
 
 def custom_score(game, player):
@@ -75,15 +90,13 @@ def custom_score(game, player):
     """
     if game.is_loser(player):
         return float("-inf")
-
-    if game.is_winner(player):
+    elif game.is_winner(player):
         return float("inf")
-
-    return stay_close_to_center(game, player)
-
-    # own_moves = len(game.get_legal_moves(player))
-    # opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    # return float(own_moves - opp_moves)
+    else:
+        # return stay_close_to_center(game, player)
+        # return stay_close_to_opponent(game, player)
+        # return stay_close_to_opponent(game, player, False)
+        return improved_opponent_center(game, player)
 
 
 class CustomPlayer:
