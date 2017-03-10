@@ -19,10 +19,12 @@ class Timeout(Exception):
 
 
 def euclidean_distance(a, b):
+    """Compute the euclidean distance between two vectors."""
     return sqrt(sum((a - b)**2 for a, b in zip(a, b)))
 
 
 def unapply_last_move(game, player):
+    """Remove the last move of player from the game, return the move and the game."""
     last_board = game.copy()
     last_move = game.__last_player_move__[player]
     last_board.__board_state__[last_move[0]][last_move[1]] = game.BLANK
@@ -31,6 +33,7 @@ def unapply_last_move(game, player):
 
 
 def stay_close_to_center(game, player):
+    """Compute the distance between the player location and the center of the game."""
     center = (game.width / 2, game.height / 2)
     player_location = game.get_player_location(player)
     distance = euclidean_distance(center, player_location)
@@ -39,6 +42,9 @@ def stay_close_to_center(game, player):
 
 
 def stay_close_to_opponent(game, player, aggresive=True):
+    """Compute the distance between the player and the opponent location.
+
+    If aggresive is True, try to select the legal moves of the opponent."""
     opponent = game.get_opponent(player)
 
     if aggresive:
@@ -55,15 +61,23 @@ def stay_close_to_opponent(game, player, aggresive=True):
     return -distance  # more distance => worst evaluation score
 
 
+def stay_close_to_blank_spaces(game, player):
+    """Compute the average distance between the player location and blank spaces."""
+    blanks = game.get_blank_spaces()
+    player_location = game.get_player_location(player)
+
+    return mean(euclidean_distance(b, player_location) for b in blanks)
+
+
 def compose_scores(*functions):
+    """Compute a list of score functions into a single function by taking their mean."""
     def composition(game, player):
         return mean(f(game, player) for f in functions)
 
     return composition
 
 
-improved_opponent_center = compose_scores(
-    improved_score, stay_close_to_opponent, stay_close_to_center)
+improved_opponent = compose_scores(improved_score, stay_close_to_opponent)
 
 
 def custom_score(game, player):
@@ -96,7 +110,8 @@ def custom_score(game, player):
         # return stay_close_to_center(game, player)
         # return stay_close_to_opponent(game, player)
         # return stay_close_to_opponent(game, player, False)
-        return improved_opponent_center(game, player)
+        # return stay_close_to_blank_spaces(game, player)
+        return improved_opponent(game, player)
 
 
 class CustomPlayer:
